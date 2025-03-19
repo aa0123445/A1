@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>卦象運算工具（完整一體化版）</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        input { width: 300px; padding: 8px; font-size: 16px; }
+        button { padding: 8px 12px; margin-left: 10px; font-size: 16px; }
+        .row-title { font-weight: bold; margin-top: 20px; }
+        .box-row { display: flex; flex-wrap: wrap; margin-top: 5px; }
+        .box-cell {
+            width: 50px; height: 50px;
+            border: 1px solid #000;
+            text-align: center; line-height: 50px;
+            font-size: 16px; margin: 2px;
+        }
+        .empty-cell {
+            width: 50px; height: 50px;
+            margin: 2px;
+        }
+        .half-space { width: 28px; height: 50px; margin: 2px; }
+        .extra-box, .log-box { margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>卦象運算工具（完整一體化版）</h2>
+    <input type="text" id="numberInput" maxlength="40" placeholder="請輸入最多20位數字或字母">
+    <button onclick="calculate()">結果</button>
+    <button onclick="reset()">清除</button>
+
+    <div class="row-title">檢測號碼</div>
+    <div id="numRow" class="box-row"></div>
+
+    <div class="row-title">卦象</div>
+    <div id="guaRow" class="box-row"></div>
+
+    <div class="row-title">磁場</div>
+    <div id="fieldRow" class="box-row"></div>
+
+    <div id="extraBox" class="extra-box"></div>
+    <div id="hiddenGuaBox" class="extra-box"></div>
+    <div id="statBox1" class="extra-box"></div>
+    <div id="statBox2" class="extra-box"></div>
+    <div id="logBox" class="log-box"></div>
+
+    <script>
+        const guaxiangMap = {
+            "11":"伏位","22":"伏位","33":"伏位","44":"伏位","66":"伏位","77":"伏位","88":"伏位","99":"伏位",
+            "19":"延年","26":"延年","34":"延年","43":"延年","62":"延年","78":"延年","87":"延年","91":"延年",
+            "14":"生氣","28":"生氣","39":"生氣","41":"生氣","67":"生氣","76":"生氣","82":"生氣","93":"生氣",
+            "13":"天醫","27":"天醫","31":"天醫","49":"天醫","68":"天醫","72":"天醫","86":"天醫","94":"天醫",
+            "17":"禍害","23":"禍害","32":"禍害","46":"禍害","64":"禍害","71":"禍害","89":"禍害","98":"禍害",
+            "16":"六煞","29":"六煞","38":"六煞","47":"六煞","61":"六煞","74":"六煞","83":"六煞","92":"六煞",
+            "12":"絕命","21":"絕命","37":"絕命","48":"絕命","69":"絕命","73":"絕命","84":"絕命","96":"絕命",
+            "18":"五鬼","24":"五鬼","36":"五鬼","42":"五鬼","63":"五鬼","79":"五鬼","81":"五鬼","97":"五鬼"
+        };
+
+        const fieldMap = {
+            "最強": ["14","41","13","31","19","91","16","61","17","71","18","81","12","21"],
+            "次強": ["67","77","68","86","78","87","47","74","89","98","79","97","69","96"],
+            "次弱": ["39","93","49","94","34","43","38","83","46","64","36","63","48","84"],
+            "最弱": ["28","82","27","72","26","62","29","92","23","32","24","42","37","73"]
+        };
+
+        const extraRules = {
+            "大延年": ["159", "951"],
+            "雙六煞": ["161", "616", "160", "610", "166", "611", "165", "615"]
+        };
+
+        function getField(pair) {
+            for (let field in fieldMap) {
+                if (fieldMap[field].includes(pair)) return field;
+            }
+            return "";
+        }
+
+        function convertLetters(input) {
+            let result = "";
+            let log = "";
+            for (let char of input) {
+                if (/[a-zA-Z]/.test(char)) {
+                    let code = char.toLowerCase().charCodeAt(0) - 96;
+                    let numStr = code < 10 ? "0" + code : "" + code;
+                    result += numStr;
+                    log += `${char} → ${numStr}<br>`;
+                } else if (/\d/.test(char)) {
+                    result += char;
+                }
+            }
+            return { converted: result, log: log };
+        }
+
+        function calculate() {
+            let rawInput = document.getElementById("numberInput").value.trim();
+            let conv = convertLetters(rawInput);
+            let input = conv.converted;
+
+            if (!/^\d{1,40}$/.test(input)) {
+                document.getElementById("numRow").innerHTML = "請輸入最多20位數字或字母。";
+                return;
+            }
+
+            let foundExtra = [];
+            for (let i = 0; i <= input.length - 3; i++) {
+                let triplet = input.substring(i, i+3);
+                for (let rule in extraRules) {
+                    if (extraRules[rule].includes(triplet)) {
+                        foundExtra.push(`${triplet} → ${rule}`);
+                    }
+                }
+            }
+            document.getElementById("extraBox").innerHTML = foundExtra.length > 0 ?
+                "特殊三码：<br>" + foundExtra.join("<br>") : "特殊三码：無符合";
+
+            let rawDigits = input.split("");
+            let displayDigits = [], logicDigits = [], log = conv.log;
+
+            for (let i = 0; i < rawDigits.length; i++) {
+                let digit = rawDigits[i];
+                if (digit === "5") {
+                    if (i === 0 || i === rawDigits.length - 1) {
+                        displayDigits.push("0"); logicDigits.push("0");
+                        log += `${i === 0 ? "開頭" : "尾數"}5 → 轉換0<br>`;
+                    } else {
+                        displayDigits.push(""); log += `中間第${i+1}位5 → 留空<br>`;
+                        continue;
+                    }
+                } else {
+                    displayDigits.push(digit); logicDigits.push(digit);
+                }
+            }
+
+            let numRowHTML = "";
+            for (let d of displayDigits) {
+                numRowHTML += d === "" ? `<div class="empty-cell"></div>` : `<div class="box-cell">${d}</div>`;
+            }
+            document.getElementById("numRow").innerHTML = numRowHTML;
+
+            let guaRowHTML = `<div class="half-space"></div>`;
+            let fieldRowHTML = `<div class="half-space"></div>`;
+            let prevGua = "", prevField = "";
+            let guaArr = [], fieldArr = [];
+            for (let i = 0; i < logicDigits.length - 1; i++) {
+                let pair = logicDigits[i] + logicDigits[i+1];
+                let gua = "", field = "";
+                if (i === 0 && pair[0] === pair[1]) { gua = "伏位"; }
+                else if (i === 0 && pair.startsWith("0")) { gua = "伏位"; }
+                else if (pair === "00" || pair[0] === pair[1] || pair.startsWith("0")) {
+                    gua = prevGua; field = prevField;
+                } else if (guaxiangMap[pair]) {
+                    gua = guaxiangMap[pair];
+                    field = getField(pair);
+                } else {
+                    gua = prevGua; field = prevField;
+                }
+                prevGua = gua; prevField = field;
+                guaArr.push(gua); fieldArr.push(field);
+                guaRowHTML += `<div class="box-cell">${gua || "-"}</div>`;
+                fieldRowHTML += `<div class="box-cell">${field || "-"}</div>`;
+            }
+            document.getElementById("guaRow").innerHTML = guaRowHTML;
+            document.getElementById("fieldRow").innerHTML = fieldRowHTML;
+
+            // 隱藏卦
+            let hiddenGua = [];
+            for (let i = 1; i < rawDigits.length - 1; i++) {
+                if (rawDigits[i] === "0") {
+                    let pair = rawDigits[i-1] + rawDigits[i+1];
+                    let gua = guaxiangMap[pair] || "無";
+                    hiddenGua.push(`第${i+1}位0 → 前後組合${pair} → ${gua}`);
+                }
+            }
+            document.getElementById("hiddenGuaBox").innerHTML = hiddenGua.length > 0 ?
+                "隱藏卦：<br>" + hiddenGua.join("<br>") : "";
+
+            let guaOnlyCount = {};
+            for (let g of guaArr) {
+                guaOnlyCount[g] = (guaOnlyCount[g] || 0) + 1;
+            }
+            let guaSorted = Object.entries(guaOnlyCount).sort((a,b)=>b[1]-a[1]);
+            document.getElementById("statBox1").innerHTML = "卦象統計：<br>" + guaSorted.map(e=>e[0]+" × "+e[1]).join("<br>");
+
+            let guaFieldCount = {};
+            for (let i = 0; i < guaArr.length; i++) {
+                if (guaArr[i] && fieldArr[i]) {
+                    let k = guaArr[i] + fieldArr[i];
+                    guaFieldCount[k] = (guaFieldCount[k] || 0) + 1;
+                }
+            }
+            let orderedGua = ["伏位","延年","生氣","天醫","禍害","六煞","絕命","五鬼"];
+            let orderedField = ["最強","次強","次弱","最弱"];
+            let fieldStat = "";
+            for (let g of orderedGua) {
+                for (let f of orderedField) {
+                    let key = g + f;
+                    if (guaFieldCount[key]) fieldStat += key + " × " + guaFieldCount[key] + "<br>";
+                }
+            }
+            document.getElementById("statBox2").innerHTML = "卦象×磁場統計：<br>" + (fieldStat || "無");
+            document.getElementById("logBox").innerHTML = log;
+        }
+
+        function reset() {
+            document.getElementById("numberInput").value = "";
+            document.getElementById("numRow").innerHTML = "";
+            document.getElementById("guaRow").innerHTML = "";
+            document.getElementById("fieldRow").innerHTML = "";
+            document.getElementById("extraBox").innerHTML = "";
+            document.getElementById("hiddenGuaBox").innerHTML = "";
+            document.getElementById("statBox1").innerHTML = "";
+            document.getElementById("statBox2").innerHTML = "";
+            document.getElementById("logBox").innerHTML = "";
+        }
+    </script>
+</body>
+</html>
